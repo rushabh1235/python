@@ -449,3 +449,4 @@ list=["rushabh","sandip","minaxi","riyu","ramila"]
 # ls=[1,2,3]
 # pro=product(lis,ls)
 # print(tuple(pro))
+# .......................................
