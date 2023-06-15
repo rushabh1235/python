@@ -1,0 +1,243 @@
+alembic                1.9.0  
+amqp                   5.1.1  
+billiard               3.6.4.0
+celery                 5.2.7  
+click                  8.1.3  
+click-didyoumean       0.3.0  
+click-plugins          1.1.1  
+click-repl             0.2.0  
+Flask                  2.2.2  
+flask-marshmallow      0.14.0 
+Flask-Migrate          4.0.0  
+Flask-SQLAlchemy       3.0.2  
+greenlet               2.0.1  
+importlib-metadata     5.2.0  
+importlib-resources    5.10.1 
+itsdangerous           2.1.2  
+Jinja2                 3.1.2  
+kombu                  5.2.4  
+Mako                   1.2.4  
+MarkupSafe             2.1.1  
+marshmallow            3.19.0 
+marshmallow-sqlalchemy 0.28.1 
+migrate                0.3.8  
+packaging              22.0   
+pip                    20.0.2 
+pkg-resources          0.0.0  
+prompt-toolkit         3.0.36 
+psycopg2-binary        2.9.5  
+pytz                   2022.7 
+setuptools             44.0.0 
+six                    1.16.0 
+SQLAlchemy             1.4.45 
+vine                   5.0.0  
+wcwidth                0.2.5  
+Werkzeug               2.2.2  
+wheel                  0.34.2 
+zipp                   3.11.0 
+
+crud operation using django rest framework
+
+Serializer Relations – Django REST Framework
+
+------------only super user access this api---------------	
+from rest_framework_decorators import permission_classes, authentication_classes
+from rest_framework import permission,authentication
+
+@permission_classes([permission.IsAuthenticated])
+@authentication_classes([authentication.BasicAuthentication])
+
+request.user ----currentuser
+
+
+----------------------jwtauthentication only admin user--------------------------------------
+
+from rest_framework_simplejwt.views import (TokenObtainPairView,TokenRefreshView,)
+
+path('api/token/',TokenObtainPairView.as_view(),name ='token_obtain_pair'),
+path('api/token/refresh/',TokenRefreshView.as_view(),name ='token_refresh'),
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+    'rest_framework.authentication.BasicAuthentication',
+    )
+}
+
+permission_classes = (IsAuthenticated,)
+####serializer_class = UserSerialzer(opetional)
+
+-------------------or-----------------------
+'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.BasicAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ]
+    
+    authentication_classes = [SessionAuthentication, BasicAuthentication]
+    permission_classes = [IsAuthenticated]
+
+---------------------create jwt token---------------------------
+
+  payload = {
+            'id':json_data['user_id'],
+            'exp':datetime.datetime.utcnow() + datetime.timedelta(minutes=30),
+            'iat':datetime.datetime.utcnow()
+        }
+
+        token = jwt.encode(payload, 'SECRET_KEY')
+
+        response = Response()
+        response.set_cookie(key='jwt', value=token, httponly=True)
+        
+        response.data = {"jwt":token}
+
+--------------------access jwt token---------------------------
+
+token = request.COOKIES.get('jwt')
+
+        if not token:
+            raise AuthenticationFailed('anauthoraised!')
+
+
+        try:
+            payload = jwt.decode(token, 'SECRET_KEY', algorithms=['HS256'])
+        
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('anauthoraised!')
+
+-------add in setting--------
+
+CORS_ORIGIN_ALLOW_ALL = True   #allow all front-end port to access this app 
+CORS_ALLOW_CREDENTIALS = True  #allow get cookies all front-end user
+
+
+----------------full text search--------------
+
+from rest_framework import generics
+
+from .models import Question
+from .serializers import QuestionSerializer
+
+
+class QuestionsAPIView(generics.ListCreateAPIView):
+    queryset = Question.objects.all()
+
+
+from rest_framework import filters
+
+class QuestionsAPIView(generics.ListCreateAPIView):
+    search_fields = ['question_text']
+    filter_backends = (filters.SearchFilter,)
+    queryset = Question.objects.all()
+    serializer_class = QuestionSerializer
+---------------------or-------------------------
+
+from django.db.models import Q
+new_data = data.filter(Q(task__icontains=s) | Q(task_name__icontains=s))
+
+---------------pagination---------------------
+
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.response import Response
+from rest_framework.exceptions import NotFound as NotFoundError
+
+
+class CustomPaginator(PageNumberPagination):
+    page_size = 3
+
+    def generate_response(self, query_set, serializer_obj, request):
+        try:
+            page_data = self.paginate_queryset(query_set, request)
+        except NotFoundError:
+            return Response({"error": "No results found for the requested page"})
+
+        serialized_page = serializer_obj(page_data, many=True)
+        return self.get_paginated_response(serialized_page.data)
+
+------add in view-------
+
+paginator = CustomPaginator()
+paginator = CustomPaginator()
+data = Task.objects.filter(user_id=20)
+response = paginator.generate_response(data, TaskSerializer, request)
+return response
+
+-----------pagination api--------------------
+https://stackoverflow.com/questions/29071312/pagination-in-django-rest-framework-using-api-view
+
+
+
+https://www.agiliq.com/blog/2019/04/drf-polls/
+
+
+
+class DynamicFieldsModelSerializer(serializers.ModelSerializer):
+    """
+    A ModelSerializer that takes an additional `fields` argument that
+    controls which fields should be displayed.
+    """
+
+    def __init__(self, *args, **kwargs):
+        # Don't pass the 'fields' arg up to the superclass
+        fields = kwargs.pop('fields', None)
+
+        # Instantiate the superclass normally
+        super().__init__(*args, **kwargs)
+
+        if fields is not None:
+            # Drop any fields that are not specified in the `fields` argument.
+            allowed = set(fields)
+            existing = set(self.fields)
+            for field_name in existing - allowed:
+                self.fields.pop(field_name)
+This would then allow you to do the following:
+
+>>> class UserSerializer(DynamicFieldsModelSerializer):
+>>>     class Meta:
+>>>         model = User
+>>>         fields = ['id', 'username', 'email']
+>>>
+>>> print(UserSerializer(user))
+{'id': 2, 'username': 'jonwatts', 'email': 'jon@example.com'}
+>>>
+>>> print(UserSerializer(user, fields=('id', 'email')))
+{'id': 2, 'email': 'jon@example.com'}
+
+
+------------------------------------------result in group by formate---------------------------------------
+https://stackoverflow.com/questions/58030564/django-rest-framework-group-data-by-dynamic-key
+
+from rest_framework import serializers
+from collections import OrderedDict
+
+class CustomListSerializer(serializers.ListSerializer):
+    def to_representation(self, data):
+        iterable = data.all() if isinstance(data, models.Manager) else data
+            list_rep = OrderedDict()
+
+        for item in iterable:
+            child_rep = self.child.to_representation(item)
+            k, v = list(child_rep.items()).pop()
+            list_rep.setdefault(k, []).append(v)
+
+        return [
+            {k: v} 
+            for k, v in list_rep.items()
+        ]
+Then set the model Meta to use it
+
+class CustomSerializer(serializers.ModelSerializer):
+    category = CatSerializer()
+    job = JobSerializer()
+
+    class Meta:
+        model = MyModel
+        fields = '__all__'
+        list_serializer_class = CustomListSerializer
+
+    def to_representation(self, value):
+        return {
+            value.category.name: [{"job": value.job.name,
+                                 "position": value.position, }]
